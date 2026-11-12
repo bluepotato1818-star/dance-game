@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>영규쌤 몰래 춤추기</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#1b1b2f;--fg:#f4f1ea;--btn:#ffd84a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101020}}
+:root[data-theme="dark"]{--bg:#101020}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"DotGothic16","Apple SD Gothic Neo","Noto Sans KR",monospace;display:flex;flex-direction:column;align-items:center}
+.hud{width:min(100%,360px);display:flex;justify-content:space-between;align-items:center;padding:8px 6px;font-size:14px}
+button{font:inherit;font-weight:700;border:3px solid #000;background:var(--btn);color:#000;padding:6px 12px;box-shadow:0 4px 0 #000;cursor:pointer}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 #000}
+.stage{position:relative;margin:4px;box-shadow:0 0 0 4px #000;width:min(calc(100% - 8px),360px,calc((100dvh - 72px) * 0.5625))}canvas{display:block;width:100%;aspect-ratio:9/16;image-rendering:pixelated;touch-action:manipulation;background:#bf9b60}.modal{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:14px}.modal.show{display:flex}.box{background:#f4f1ea;color:#111;border:4px solid #000;box-shadow:0 0 0 4px #ffd84a,6px 6px 0 4px #000;padding:16px;text-align:center;font-size:15px;line-height:1.6;max-width:100%}.box .row{display:flex;gap:10px;justify-content:center;margin-top:12px}.paper{background:#fffdf2;border:2px solid #b9a77a;padding:10px 14px;min-width:210px;max-height:60vh;overflow:auto;transform:rotate(-1.5deg);box-shadow:3px 3px 0 rgba(0,0,0,.25);text-align:left}.paper h3{margin:0 0 8px;text-align:center;font-size:17px;border-bottom:2px solid #333;padding-bottom:4px}.pr{display:flex;justify-content:space-between;gap:16px;border-bottom:1px dashed #aaa;padding:2px 0}.tbtn{position:absolute;left:0;right:0;margin:0 auto;width:max-content;bottom:6%;font-size:18px;padding:10px 22px;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="hud"><span>클리닉 <b id="total">0</b>시간 · <b id="left">0/5판</b></span><span><button id="mute">🔊</button> <button id="start" style="display:none">다시 시작</button></span></div>
+<div class="stage"><canvas id="cv" width="360" height="640"></canvas><button class="tbtn" id="tbtn">게임 시작</button><div class="modal" id="modal"><div class="box"><div id="mtext"></div><div class="row" id="mrow"></div></div></div></div>
+<script>
+var cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+ctx.imageSmoothingEnabled=false;
+var U=4,FONT='"DotGothic16","Press Start 2P","Apple SD Gothic Neo",monospace';
+function r(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x*U),Math.round(y*U),w*U,h*U)}
+function t(s,x,y,size,c,al){ctx.font="bold "+size+"px "+FONT;ctx.textAlign=al||"center";ctx.textBaseline="middle";ctx.lineWidth=4;ctx.strokeStyle="#000";ctx.lineJoin="round";ctx.strokeText(s,x,y);ctx.fillStyle=c;ctx.fillText(s,x,y)}
+
+var G={"예린":1,"서현":1,"서윤":1,"소윤":1,"서정":1,"혜리":1,"송희":1,"세하":1};
+var HAIR=["#2b1b12","#5a3820","#111","#7a4a22","#222","#a0522d","#1a1a2e","#3b2412","#000","#6b3f1d","#2a2a2a","#4a2c17","#3a2a1a"];
+var SHIRT=["#e05d5d","#5d9be0","#e0c35d","#6bc46d","#b07ae0","#e08a5d","#5de0d0","#e05da8","#8a8ae0","#9ac45d","#e0a05d","#5d7ae0","#e0b85d"];
+var PLAN=[["예지",0,0],["서윤",0,1],["서현",0,2],["송희",0,3],["세하",0,4],
+ ["혜리",1,0,0],["서정",1,0,2],["준서",1,1,1],["승민",1,2,0],["승현",1,2,2],["예린",1,3,1],["태현",1,4,2],["소윤",1,4,0]];
+var S=PLAN.map(function(p,i){
+  var side=p[1],row=p[2],k=p[3];
+  return{name:p[0],i:i,clinic:0,up:false,danced:false,sleepy:false,woke:false,fx:null,
+    cx:side===0?14:44+16*k, y0:34+25*row};
+});
+var phase="title",phaseEnd=0,count=3,msgLines=["시작 버튼을 눌러 주세요!"],modalOpen=false,lastNow=0,shout=false;
+function bat(n){var c=n.charCodeAt(n.length-1)-0xAC00;return c>=0&&c<11172&&c%28!==0}
+function eul(n){return n+(bat(n)?"을":"를")}
+function listIga(a){return a.join(", ")+(bat(a[a.length-1])?"이":"가")}
+function showModal(h,btns){document.getElementById("mtext").innerHTML=h;var row=document.getElementById("mrow");row.innerHTML="";btns.forEach(function(b){var e=document.createElement("button");e.textContent=b[0];e.onclick=b[1];row.appendChild(e)});document.getElementById("modal").classList.add("show");modalOpen=true}
+function closeModal(){document.getElementById("modal").classList.remove("show");modalOpen=false}
+function updTotal(){document.getElementById("total").textContent=S.reduce(function(a,s){return a+s.clinic},0)}
+var AC=null,musicTimer=null,muted=false,mi=0,gameEnd=0,lastTx="",NT=[],round=0;
+var MEL=[523,659,784,659,523,659,784,1047,988,784,659,784,880,784,659,523,587,698,880,698,587,698,880,1175,1047,880,698,880,988,784,659,784];
+var BAS=[131,131,196,196,175,175,196,196];
+function note(f,t0,d,type,vol){var o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(vol,t0);g.gain.exponentialRampToValueAtTime(0.001,t0+d);o.connect(g);g.connect(AC.destination);o.start(t0);o.stop(t0+d)}
+function musicOn(){
+  if(muted)return;
+  if(!AC){var C=window.AudioContext||window.webkitAudioContext;if(!C)return;AC=new C()}
+  if(AC.state==="suspended")AC.resume();
+  if(musicTimer)return;
+  var tick=function(){var t0=AC.currentTime+0.02;note(MEL[mi%32],t0,0.14,"square",0.05);if(mi%2===0)note(BAS[Math.floor(mi/4)%8],t0,0.26,"triangle",0.12);mi++};
+  tick();musicTimer=setInterval(tick,150);
+}
+function musicOff(){clearInterval(musicTimer);musicTimer=null}
+document.getElementById("mute").onclick=function(){muted=!muted;this.textContent=muted?"🔇":"🔊";if(muted)musicOff();else if(phase==="teach"||phase==="count")musicOn()};
+function ensureAC(){if(!AC){var C=window.AudioContext||window.webkitAudioContext;if(!C)return false;AC=new C()}if(AC.state==="suspended")AC.resume();return true}
+function siren(){
+  if(muted||!ensureAC())return;
+  var o=AC.createOscillator(),g=AC.createGain(),t0=AC.currentTime;
+  o.type="sawtooth";o.connect(g);g.connect(AC.destination);g.gain.setValueAtTime(0.08,t0);
+  for(var i=0;i<4;i++){o.frequency.setValueAtTime(700,t0+i*.5);o.frequency.linearRampToValueAtTime(1000,t0+i*.5+.25);o.frequency.linearRampToValueAtTime(700,t0+i*.5+.5)}
+  g.gain.setValueAtTime(0.08,t0+1.9);g.gain.linearRampToValueAtTime(0,t0+2);o.start(t0);o.stop(t0+2.05);
+}
+function endGame(){
+  phase="over";phaseEnd=Infinity;gameEnd=0;musicOff();shout=false;
+  document.getElementById("left").textContent="끝!";
+  S.forEach(function(s){s.up=false;s.sleepy=false;s.fx=null});
+  var L=S.filter(function(s){return s.clinic>0}).sort(function(a,b){return b.clinic-a.clinic});
+  var h='<div class="paper"><h3>📋 클리닉 명단</h3>';
+  if(L.length)L.forEach(function(s){h+='<div class="pr"><span>'+s.name+'</span><span>'+s.clinic+'시간</span></div>'});
+  else h+='<div class="pr"><span>대상자 없음 🎉</span><span></span></div>';
+  h+='</div>';
+  msgLines=["수업 끝!"];
+  showModal(h,[["클릭해서 넘어가기",function(){closeModal();phase="study";msgLines=["클리닉 시간…","열심히 공부하는 학생들"];tb.textContent="다시 플레이하겠습니까?";tb.style.display=""}]]);
+}
+var PAGES=[["안녕! 나는 예지야.","영규쌤 몰래 춤추기","룰을 알려 줄게!"],["수업 중 졸고 있는 학생 이름은","칠판에 나와요.","그 학생을 눌러서 '예'를","누르면 깨워서 춤추게 해요!"],["영규쌤이 돌아보기 전에","춤추는 학생을 눌러서","다시 앉혀야 해요!","'곧 돌아봐요!'가 뜨면 서둘러요!"],["걸리면 사이렌이 울리고","클리닉 +1시간!","안 걸리면 클리닉이 줄어요.","총 5판, 잘 해봐요!"]],introPage=0;
+function bigTeacher(now){
+  ctx.save();ctx.translate(45*U,58*U);ctx.scale(2,2);
+  var BR="#7a4a22",sk="#f2c9a0",s=Math.floor(now/180)%2;
+  r(-6,26,5,10,"#2b2b3a");r(1,26,5,10,"#2b2b3a");r(-7,36,6,2,"#111");r(1,36,6,2,"#111");
+  r(-8,12,16,14,"#4a4a5a");r(-11,13,3,10,"#4a4a5a");r(8,13,3,10,"#4a4a5a");r(-11,23,3,3,sk);r(8,23,3,3,sk);
+  r(-2,12,4,6,"#fff");r(-1,13,2,8,"#c0392b");
+  r(-5,4,10,8,sk);r(-6,0,12,4,BR);r(-6,4,1,4,BR);r(5,4,1,4,BR);
+  r(-4,6,3,1,"#222");r(-4,9,3,1,"#222");r(-4,6,1,4,"#222");r(-2,6,1,4,"#222");
+  r(1,6,3,1,"#222");r(1,9,3,1,"#222");r(1,6,1,4,"#222");r(3,6,1,4,"#222");
+  r(-1,7,2,1,"#222");r(-3,7,1,2,"#222");r(2,7,1,2,"#222");
+  if(s)r(-2,10,4,2,"#7a1a1a");else r(-2,11,4,1,"#c0392b");
+  ctx.restore();
+}
+PAGES=[["안녕! 나는 예지야.","요즘 수업 시간에","너무 졸리더라고… Zzz"],["그래서 우리는","수업 중에 몰래","춤을 추기로 했어!"],["졸고 있는 친구 이름이","칠판에 나와! 그 친구를","눌러서 '예'를 누르면","깨워서 춤추게 할 수 있어."],["근데 영규쌤이 돌아보기","전에 다시 앉혀야 해!","'곧 돌아봐요!'가 뜨면","서둘러야 돼!"],["걸리면 사이렌이 울리고","클리닉 시간이 늘어ㅠ","안 걸리면 클리닉 시간이","줄어들어! 총 5판이야, 도와줘!"]];
+function bigYeji(now){
+  ctx.save();ctx.translate(45*U,58*U);ctx.scale(2,2);
+  var HR="#2b1b12",sk="#f2c9a0",sh="#e05d5d",s=Math.floor(now/180)%2;
+  r(-5,26,4,10,"#2b3a67");r(1,26,4,10,"#2b3a67");r(-6,36,5,2,"#fff");r(1,36,5,2,"#fff");
+  r(-6,12,12,14,sh);r(6,13,3,10,sh);r(6,23,3,3,sk);
+  if(s){r(-9,3,3,10,sh);r(-9,1,3,3,sk)}else{r(-9,13,3,10,sh);r(-9,23,3,3,sk)}
+  r(-5,4,10,8,sk);r(-6,0,12,4,HR);r(-5,4,10,1,HR);r(-6,4,1,4,HR);r(5,4,1,4,HR);r(6,3,2,9,HR);
+  r(-3,7,1,2,"#222");r(2,7,1,2,"#222");r(-4,9,1,1,"#ff9aa2");r(3,9,1,1,"#ff9aa2");
+  if(s)r(-2,10,4,2,"#7a1a1a");else r(-2,10,4,1,"#c0392b");
+  ctx.restore();
+}
+function bigBubble(lines){
+  var h=lines.length*5+6,y=24;
+  r(5,y-1,80,h+2,"#000");r(6,y,78,h,"#fff");
+  r(40,y+h,10,1,"#000");r(41,y+h+1,8,1,"#000");r(42,y+h+2,6,1,"#000");r(43,y+h+3,4,1,"#000");
+  r(41,y+h,8,1,"#fff");r(42,y+h+1,6,1,"#fff");r(43,y+h+2,4,1,"#fff");
+  ctx.font="bold 13px "+FONT;ctx.fillStyle="#111";ctx.textAlign="center";ctx.textBaseline="middle";
+  lines.forEach(function(l,i){ctx.fillText(l,45*U,(y+5+i*5)*U)});
+}
+function drawIntro(now){
+  r(0,0,W,H,"#6b4a2a");r(3,3,W-6,H-6,"#2f5d46");
+  for(var i=0;i<14;i++)r((i*37)%80+4,(i*53)%140+6,1,1,"rgba(255,255,255,.25)");
+  r(3,H-12,W-6,2,"#b8a27a");r(3,H-10,W-6,7,"#8a6a3e");
+  if(phase==="title"){
+    var b=Math.sin(now/300)*3;
+    t("영규쌤",180,150+b,52,"#fff");
+    t("몰래 춤추기",180,225+b,40,"#ffd84a");
+    t("수업 중에 몰래 춤을 춰라!",180,300,15,"#cfe8d8");
+    t("♪",70,380+Math.sin(now/220)*8,30,"#7dd3ff");t("♫",290,410+Math.sin(now/260+1)*8,30,"#ff9ad0");t("♬",180,470+Math.sin(now/240+2)*8,30,"#9dff9d");
+  }else{
+    bigYeji(now);bigBubble(PAGES[introPage]);
+    t((introPage+1)+"/"+PAGES.length,180,545,14,"#ddd");
+  }
+}
+var tb=document.getElementById("tbtn");
+tb.onclick=function(){
+  if(phase==="study"){tb.style.display="none";document.getElementById("start").onclick();return}
+  if(phase==="title"){phase="intro";introPage=0;tb.textContent="다음 ▶";ensureAC()}
+  else if(phase==="intro"){
+    introPage++;
+    if(introPage>=PAGES.length){tb.style.display="none";var sb=document.getElementById("start");sb.style.display="";sb.onclick()}
+    else if(introPage===PAGES.length-1)tb.textContent="수업 시작!";
+  }
+};
+function askWake(s){showModal(eul(s.name)+" 깨우겠습니까?",[["예",function(){closeModal();s.up=true;s.danced=true;if(s.sleepy){s.sleepy=false;s.woke=true}}],["아니오",closeModal]])}
+function bub(cx,y,text,w){var x=Math.max(w/2+1,Math.min(W-w/2-1,cx));r(x-w/2-1,y-1,w+2,8,"#000");r(x-w/2,y,w,6,"#fff");r(x-1,y+6,3,2,"#000");r(x,y+6,1,1,"#fff");ctx.font="bold 11px "+FONT;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle="#111";ctx.fillText(text,x*U,(y+3)*U)}
+function drawBubbles(now){
+  if(shout&&phase==="turn"){ctx.fillStyle="rgba(255,0,0,"+(0.14+0.1*Math.sin(now/90))+")";ctx.fillRect(0,0,360,640)}
+  if(musicTimer&&Math.random()<0.12)NT.push({x:20+Math.random()*320,y:650,v:0.6+Math.random()*0.8,c:["♪","♫","♬"][Math.floor(Math.random()*3)],col:["#ffd84a","#7dd3ff","#ff9ad0","#9dff9d"][Math.floor(Math.random()*4)],ph:Math.random()*6});
+  NT=NT.filter(function(n){n.y-=n.v;n.x+=Math.sin(now/400+n.ph)*0.6;return n.y>-20});
+  NT.forEach(function(n){t(n.c,n.x,n.y,22,n.col)});
+  if(phase==="study")S.forEach(function(s){if(s.clinic>0)bub(s.cx,s.y0-6,"집 가고 싶다",28)});
+  S.forEach(function(s){if(s.up&&!s.woke&&s.clinic<=0)bub(s.cx,s.y0-6,"아 힘들어…",26)});if(shout&&phase==="turn")bub(74,26,"나의 시간이야",30)}
+
+function drawRoom(now){
+  // floor
+  for(var y=0;y<H;y+=4)for(var x=0;x<W;x+=4)r(x,y,4,4,((x+y)/4)%2?"#c9a66b":"#bf9b60");
+  r(0,0,W,2,"#3a2a4a");
+  // board
+  r(8,2,74,17,"#6b4a2a");r(10,4,70,13,"#2f5d46");r(10,17,70,1,"#4a3520");
+  // teacher desk-ish marks
+  var turned=(phase==="turn");
+  if(turned){ctx.fillStyle="rgba(255,235,90,.22)";ctx.beginPath();ctx.moveTo(45*U,30*U);ctx.lineTo(0,640);ctx.lineTo(360,640);ctx.closePath();ctx.fill()}
+  // desks
+  for(var rw=0;rw<5;rw++){
+    var y=34+25*rw;
+    deskRow(6,y,1);deskRow(36,y,3);
+  }
+}
+function deskRow(x,y,n){
+  for(var k=0;k<n;k++){var dx=x+16*k;
+    r(dx,y,16,7,"#8b5a2b");r(dx,y,16,1,"#c08a4a");r(dx,y+6,16,1,"#5e3a17");
+    r(dx,y,1,7,"#5e3a17");r(dx+15,y,1,7,"#5e3a17");
+    r(dx+3,y+2,5,3,"#e8e2d0");r(dx+10,y+3,3,1,"#e0c35d");
+  }
+}
+function chair(cx,y0){r(cx-4,y0+13,8,6,"#3a5ba0");r(cx-4,y0+18,8,1,"#27406e")}
+function drawStudent(s,now){
+  var cx=s.cx,y0=s.y0,hair=HAIR[s.i],sh=SHIRT[s.i],skin="#f2c9a0",f=Math.floor(now/180)%2;
+  chair(cx,y0);
+  if(s.sleepy){
+    r(cx-5,y0+12,10,8,sh);r(cx-6,y0+6,3,3,skin);r(cx+3,y0+6,3,3,skin);r(cx-4,y0+7,8,6,hair);if(G[s.name]){r(cx-5,y0+8,1,8,hair);r(cx+4,y0+8,1,8,hair)}if(s.name==="예지")r(cx+4,y0+8,2,6,hair);
+    var z=Math.floor(now/500)%3;t("Z".repeat(z+1),(cx+7)*U,(y0+4-z)*U,12,"#9fd6ff");
+  }else if(!s.up){
+    r(cx-5,y0+16,10,4,sh);r(cx-5,y0+16,10,1,"rgba(0,0,0,.25)");
+    r(cx-4,y0+9,8,7,hair);r(cx-3,y0+8,6,1,hair);
+    if(G[s.name]){r(cx-5,y0+10,1,9,hair);r(cx+4,y0+10,1,9,hair)}else{r(cx-5,y0+12,1,2,skin);r(cx+4,y0+12,1,2,skin)}
+    if(s.name==="예지")r(cx-1,y0+14,2,5,hair);
+    r(cx-5,y0+7,2,2,skin);r(cx+3,y0+7,2,2,skin);
+  }else{
+    var hy=y0+7+(f?0:1);
+    r(cx-4,hy+7,8,6,sh);r(cx-4,hy+13,3,3,"#2b3a67");r(cx+1,hy+13,3,3,"#2b3a67");
+    if(f){r(cx-8,hy-2,2,9,sh);r(cx-8,hy-4,2,2,skin);r(cx+4,hy+8,2,5,sh)}
+    else{r(cx+6,hy-2,2,9,sh);r(cx+6,hy-4,2,2,skin);r(cx-6,hy+8,2,5,sh)}
+    r(cx-4,hy,8,7,skin);r(cx-4,hy,8,3,hair);
+    r(cx-2,hy+4,1,1,"#222");r(cx+1,hy+4,1,1,"#222");r(cx-1,hy+6,2,1,"#c0392b");
+    if(G[s.name]){r(cx-5,hy,1,8,hair);r(cx+4,hy,1,8,hair);r(cx-5,hy+13,10,2,"#d65a9a")}
+    if(s.name==="예지"){r(cx+4,hy+1,2,6,hair);r(cx+5,hy+6,1,2,hair)}
+    t("♪",cx*U+(f?18:-18),(hy-5)*U,16,"#ffd84a");
+  }
+  // name
+  t(s.name,cx*U,(y0+22)*U+4,12,"#fff");
+  // clinic badge
+  r(cx-6,y0+1,12,5,"#000");r(cx-5,y0+2,10,3,s.clinic>0?"#d64545":"#3a3a55");
+  t(s.clinic+"시간",cx*U,(y0+3.5)*U,9,"#fff");
+  // floating fx
+  if(s.fx&&now<s.fx.until){t(s.fx.text,cx*U,(y0-1-(s.fx.until-now)/1000*0)*U+0,14,s.fx.color)}
+}
+function drawTeacher(now){
+  var cx=45,y=21,turned=(phase==="turn"),skin="#f2c9a0";
+  r(cx-7,y+7,14,7,"#4a4a5a");r(cx-8,y+8,2,5,"#4a4a5a");r(cx+6,y+8,2,5,"#4a4a5a");
+  if(!turned){
+    r(cx-4,y,8,8,"#7a4a22");r(cx-3,y-1,6,1,"#7a4a22");
+    if(phase==="teach"||phase==="count"){r(cx+8,y+4,2,5,skin);r(cx+9,y-4,1,8,"#fff")}
+  }else{
+    r(cx-4,y,8,8,skin);r(cx-4,y,8,2,"#7a4a22");
+    r(cx-3,y+3,2,2,"#fff");r(cx+1,y+3,2,2,"#fff");r(cx-2,y+4,1,1,"#c00");r(cx+2,y+4,1,1,"#c00");
+    r(cx-3,y+2,3,1,"#c00");r(cx,y+2,3,1,"#c00");r(cx-2,y+6,4,1,"#7a1a1a");
+    t("!!",cx*U+44,(y+2)*U,20,"#ff4d4d");
+  }
+  t("영규쌤",cx*U,(y+15)*U+2,12,"#fff");
+}
+function drawBoard(now){
+  var L=msgLines;
+  if(phase==="count"){t(L[0],180,26,13,"#ffd84a");t(String(count),180,50,28,"#fff")}
+  else if(L.length===1)t(L[0],180,40,13,"#f2f2f2");
+  else L.forEach(function(l,i){t(l,180,28+i*22,12,"#f2f2f2")});
+}
+function drawBoardOld(now){
+  var big=(phase==="count");
+  t(msg,180,6.5*U+8,12,"#f2f2f2");
+  if(phase==="count")t(String(count),180,12.5*U+8,34,"#ffd84a");
+  else if(phase==="teach")t("♪ 수업 중… ♪",180,12.5*U+8,14,"#cfe8d8");
+}
+function loop(now){
+  if(modalOpen){phaseEnd+=now-lastNow;if(gameEnd)gameEnd+=now-lastNow}lastNow=now;
+  if(gameEnd){var sec=Math.max(0,Math.ceil((gameEnd-now)/1000)),tx=Math.floor(sec/60)+":"+("0"+sec%60).slice(-2);if(tx!==lastTx){lastTx=tx;document.getElementById("left").textContent=tx}}
+  step(now);
+  if(phase==="title"||phase==="intro"){drawIntro(now);requestAnimationFrame(loop);return}
+  drawRoom(now);
+  S.forEach(function(s){if(phase==="study"&&s.clinic<=0)return;drawStudent(s,now)});
+  drawTeacher(now);
+  drawBubbles(now);
+  drawBoard(now);
+  requestAnimationFrame(loop);
+}
+function step(now){
+  if(phase==="teach"&&now>=phaseEnd){phase="count";count=2;phaseEnd=now+1000;msgLines=["곧 돌아봐요!"]}
+  else if(phase==="count"&&now>=phaseEnd){
+    count--;
+    if(count>0)phaseEnd=now+1000;else turnAround(now);
+  }else if(phase==="turn"&&now>=phaseEnd)newRound(now);
+}
+function newRound(now){
+  if(round>=5){endGame();return}round++;document.getElementById("left").textContent=round+"/5판";
+  closeModal();
+  var n=5+Math.floor(Math.random()*3),idx=S.map(function(s,i){return i}).sort(function(){return Math.random()-.5}),names=[];
+  S.forEach(function(s){s.up=false;s.danced=false;s.sleepy=false;s.woke=false;s.fx=null});
+  idx.slice(0,n).forEach(function(i){S[i].sleepy=true;names.push(S[i].name)});
+  phase="teach";shout=false;musicOn();phaseEnd=now+(5+Math.random()*2)*1000;
+  msgLines=[listIga(names)+" 졸고 있어요!","깨워서 춤추게 하세요!"];
+}
+function newRoundOld(now){
+  phase="teach";phaseEnd=now+(5+Math.random()*15)*1000;
+  S.forEach(function(s){s.up=false;s.danced=false;s.fx=null});
+  msg="학생들을 일으켜 춤추게 하세요!";
+}
+function turnAround(now){
+  phase="turn";phaseEnd=now+2500;
+  musicOff();var c=0,ok=0,missed=[];
+  S.forEach(function(s){
+    if(s.sleepy){missed.push(s.name)}
+    else if(s.up){s.clinic++;s.up=false;c++;s.fx={text:"+1시간",color:"#ff6b6b",until:now+2500}}
+    else if(s.woke||(s.danced&&s.clinic>0)){var had=s.clinic>0;if(had)s.clinic--;ok++;s.fx=had?{text:"-1시간",color:"#7dff9b",until:now+2500}:null}
+  });
+  shout=c>0;if(shout)siren();
+  msgLines=[c?"걸렸다! 클리닉 +1시간!":(ok?"안 걸렸어요! 클리닉 차감!":"쌤이 돌아봤어요…")];
+  updTotal();
+  if(missed.length){phaseEnd=Infinity;showModal(listIga(missed)+" 졸아서 수업 내용을 놓쳤어요…<br><b>복습 테스트 0점</b>",[["다음 라운드",function(){newRound(performance.now())}]])}
+}
+function turnAroundOld(now){
+  phase="turn";phaseEnd=now+2500;
+  var c=0,ok=0;
+  S.forEach(function(s){
+    if(s.up){s.clinic++;s.up=false;c++;s.fx={text:"+1시간 ㅠㅠ",color:"#ff6b6b",until:now+2500}}
+    else if(s.danced){if(s.clinic>0)s.clinic--;ok++;s.fx={text:"-1시간 성공!",color:"#7dff9b",until:now+2500}}
+  });
+  msg=c?c+"명 걸렸다! 클리닉 +1시간!":(ok?ok+"명 무사 성공! 클리닉 -1시간!":"아무도 안 췄어요…");
+  document.getElementById("total").textContent=S.reduce(function(a,s){return a+s.clinic},0);
+}
+cv.addEventListener("pointerdown",function(e){
+  var b=cv.getBoundingClientRect(),k=360/b.width,x=(e.clientX-b.left)*k/U,y=(e.clientY-b.top)*k/U;
+  for(var i=0;i<S.length;i++){var s=S[i];
+    if(Math.abs(x-s.cx)<=8&&y>=s.y0&&y<=s.y0+25){
+      if(modalOpen)return;
+      if(s.up&&(phase==="teach"||phase==="count")){s.up=false}
+      else if(phase==="teach")askWake(s);
+      return;
+    }}
+});
+document.getElementById("start").onclick=function(){
+  S.forEach(function(s){s.clinic=0});
+  document.getElementById("total").textContent="0";
+  this.textContent="다시 시작";round=0;tb.style.display="none";
+  newRound(performance.now());
+};
+var W=90,H=160;
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
